@@ -1,0 +1,138 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invoice App</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{font-family:Arial;margin:0;padding:0;}
+.container{padding:12px;}
+input,button{padding:10px;width:100%;margin:5px 0;font-size:16px;}
+.card{background:#fff;padding:12px;margin:10px 0;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+#invSuggestBox{display:none;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);border-radius:8px;position:relative;z-index:20;}
+.suggest{padding:10px;border-bottom:1px solid #eee;}
+.suggest:hover{background:#f0f0f0;cursor:pointer;}
+
+@media(max-width:600px){
+  .card{border-radius:0;box-shadow:none;margin:0;}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h2>Products</h2>
+<input id="pName" placeholder="Product name">
+<input id="pRate" type="number" placeholder="Rate">
+<button onclick="addProduct()">Add Product</button>
+
+<input id="searchProducts" placeholder="Search products" oninput="renderProducts()">
+<div id="productList" class="card"></div>
+
+<h2>Create Invoice</h2>
+
+<div class="card">
+  <input id="invSearch" placeholder="Search product" oninput="showInvoiceSuggestions()">
+  <div id="invSuggestBox"></div>
+
+  <input id="invQty" type="number" value="1">
+  <input id="invDisc" type="number" value="0">
+
+  <button onclick="manualAdd()">Add to Invoice</button>
+
+  <table border="1" width="100%" id="invoiceTable"></table>
+
+  <h3>Total: <span id="total">0</span></h3>
+
+  <button onclick="clearBill()">Clear Bill</button>
+  <button onclick="downloadPDF()">Download PDF</button>
+</div>
+
+</div>
+
+<script>
+let products = JSON.parse(localStorage.getItem("prods")||"[]");
+let invoice = [];
+
+function save(){localStorage.setItem("prods",JSON.stringify(products));}
+
+function addProduct(){
+  let n=pName.value.trim(), r=Number(pRate.value);
+  if(!n||!r)return;
+  products.push({id:Date.now(),name:n,rate:r});
+  save(); renderProducts();
+}
+
+function renderProducts(){
+  let q=searchProducts.value.toLowerCase();
+  productList.innerHTML = products
+   .filter(p=>p.name.toLowerCase().includes(q))
+   .map(p=>`${p.name} - PKR ${p.rate}`)
+   .join("<br>");
+}
+
+function showInvoiceSuggestions(){
+  let q=invSearch.value.toLowerCase();
+  let m=products.filter(p=>p.name.toLowerCase().includes(q));
+  if(!q||m.length===0){invSuggestBox.style.display="none";return;}
+  invSuggestBox.style.display="block";
+  invSuggestBox.innerHTML = m.map(p =>
+    `<div class='suggest' onclick='selectProd(${p.id})'>${p.name} — PKR ${p.rate}</div>`
+  ).join("");
+}
+
+function selectProd(id){
+  let p=products.find(x=>x.id===id);
+  let qty=Number(invQty.value), disc=Number(invDisc.value);
+  invoice.push({name:p.name,rate:p.rate,qty,disc,total:p.rate*qty});
+  invSuggestBox.style.display="none";
+  invSearch.value="";
+  renderInvoice();
+}
+
+function manualAdd(){
+  let p=products.find(x=>x.name.toLowerCase()===invSearch.value.toLowerCase());
+  if(!p)return;
+  selectProd(p.id);
+}
+
+function renderInvoice(){
+  invoiceTable.innerHTML = `
+  <tr><th>Name</th><th>Rate</th><th>Qty</th><th>Total</th></tr>
+  ` + invoice.map(i=>`
+    <tr>
+      <td>${i.name}</td>
+      <td>${i.rate}</td>
+      <td>${i.qty}</td>
+      <td>${i.rate*i.qty}</td>
+    </tr>
+  `).join("");
+  let sum=invoice.reduce((a,b)=>a+b.rate*b.qty,0);
+  total.textContent=sum;
+}
+
+function clearBill(){invoice=[];renderInvoice();}
+
+function downloadPDF(){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  doc.text("Invoice",10,10);
+  let y=20;
+  invoice.forEach(i=>{
+    doc.text(`${i.name}  x${i.qty} = ${i.rate*i.qty}`,10,y);
+    y+=10;
+  });
+  doc.text(`Total: ${total.textContent}`,10,y+10);
+  doc.save("invoice.pdf");
+}
+
+renderProducts();
+</script>
+
+</body>
+</html>
